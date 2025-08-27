@@ -54,7 +54,7 @@ st.markdown(
             color: white;
             font-weight: 600;
         }}
-        .bottom-nav {{
+        .bottom-nav {
             position: fixed;
             left: 0;
             right: 0;
@@ -62,14 +62,38 @@ st.markdown(
             background: white;
             border-top: 1px solid #e0e0e0;
             padding: 4px 8px;
-        }}
-        .bottom-nav button {{
+        }
+        .bottom-nav button {
             width: 100%;
             background: transparent;
             border: none;
             color: {MAIN_COLOR};
-            font-size: 16px;
-        }}
+            font-size: 14px;
+        }
+        .bottom-nav .active {
+            color: white;
+            background: {MAIN_COLOR};
+            border-radius: 12px;
+        }
+        .nav-icon {
+            font-size: 20px;
+            display: block;
+        }
+        .onboard-wrapper {
+            text-align: center;
+            padding: 60px 20px;
+        }
+        .onboard-circle {
+            width: 120px;
+            height: 120px;
+            border-radius: 60px;
+            background: {SUB_COLOR};
+            margin: 0 auto 24px auto;
+            display:flex;
+            align-items:center;
+            justify-content:center;
+            font-size:32px;
+        }
     </style>
     """,
     unsafe_allow_html=True,
@@ -93,14 +117,20 @@ if "api_key" not in st.session_state:
 if "saved_files" not in st.session_state:
     st.session_state.saved_files = []
 
-if "save_format" not in st.session_state:
-    st.session_state.save_format = "txt"
+if "basic_settings" not in st.session_state:
+    st.session_state.basic_settings = {
+        "model": "GPT-4 (무료)",
+        "tone": "전문적",
+        "length": 800,
+    }
 
-if "model_settings" not in st.session_state:
-    st.session_state.model_settings = {
-        "temperature": 0.7,
-        "max_length": 1000,
-        "tone": "전문적인",
+if "advanced_settings" not in st.session_state:
+    st.session_state.advanced_settings = {
+        "creativity": 0.5,
+        "polish": 0.5,
+        "auto_save": True,
+        "smart_edit": True,
+        "export_format": "PDF 문서",
     }
 
 if "show_saved" not in st.session_state:
@@ -183,15 +213,22 @@ def get_ai_response(user_input: str, uploaded_file=None) -> str:
             return templates["default"]
 
     try:
+        model_map = {
+            "GPT-4 (무료)": "gpt-4o-mini",
+            "GPT-4": "gpt-4o",
+            "GPT-3.5": "gpt-3.5-turbo",
+        }
+        selected_model = st.session_state.basic_settings.get("model", "GPT-4 (무료)")
+        model_name = model_map.get(selected_model, "gpt-4o-mini")
         llm = ChatOpenAI(
             api_key=st.session_state.api_key,
-            model="gpt-4o-mini",
-            temperature=st.session_state.model_settings["temperature"]
+            model=model_name,
+            temperature=st.session_state.advanced_settings["creativity"],
         )
 
         system_prompt = f"""당신은 전문 자기소개서 작성 코치입니다.
-        톤: {st.session_state.model_settings['tone']}
-        최대 길이: {st.session_state.model_settings['max_length']}자
+        톤: {st.session_state.basic_settings['tone']}
+        최대 길이: {st.session_state.basic_settings['length']}자
 
         - 구체적이고 실용적인 조언
         - 예시를 들어 설명
@@ -230,12 +267,18 @@ def save_conversation():
 
     timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
     filename = f"자소서대화_{timestamp}"
+    export = st.session_state.advanced_settings.get("export_format", "텍스트 파일")
 
-    if st.session_state.save_format == "txt":
-        file_data = content
-        mime = "text/plain"
-        ext = "txt"
-    elif st.session_state.save_format == "docx" and DOC_LIBS_AVAILABLE:
+    if export == "PDF 문서" and DOC_LIBS_AVAILABLE:
+        bio = io.BytesIO()
+        doc = SimpleDocTemplate(bio, pagesize=letter)
+        styles = getSampleStyleSheet()
+        story = [Paragraph(p, styles["Normal"]) for p in content.split('\n')]
+        doc.build(story)
+        file_data = bio.getvalue()
+        mime = "application/pdf"
+        ext = "pdf"
+    elif export == "Word 문서" and DOC_LIBS_AVAILABLE:
         doc = Document()
         doc.add_heading('AI 자기소개서 코칭 대화', 0)
         for para in content.split('\n'):
@@ -245,6 +288,10 @@ def save_conversation():
         file_data = bio.getvalue()
         mime = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
         ext = "docx"
+    elif export == "HTML 문서":
+        file_data = f"<html><body><pre>{content}</pre></body></html>"
+        mime = "text/html"
+        ext = "html"
     else:
         file_data = content
         mime = "text/plain"
@@ -260,57 +307,45 @@ def save_conversation():
 
     return f"{filename}.{ext}"
 
-# ================= UI 렌더링 함수 =================
-def render_header() -> None:
-    tabs = ["대화", "세부설정"]
-    col1, col2 = st.columns([4, 1], gap="small")
-    with col1:
-        st.markdown(
-            f"<div style='background:{MAIN_COLOR}; padding:12px; border-radius:0 0 0 18px; text-align:left; display:inline-block;'>"
-            f"<span class='chat-header-title'>AI 자기소개서 코칭</span></div>",
-            unsafe_allow_html=True,
-        )
-    with col2:
-        selection = st.selectbox(
-            "탭 선택",
-            tabs,
-            index=tabs.index(st.session_state.current_tab),
-            label_visibility="collapsed",
-            key="tab_select",
-        )
-    if selection != st.session_state.current_tab:
-        st.session_state.current_tab = selection
-        st.rerun()
+##########################################
+# UI 렌더링 함수
+##########################################
+
+def render_header(title: str) -> None:
+    st.markdown(
+        f"<div style='background:{MAIN_COLOR}; padding:12px; text-align:center; color:white; font-weight:600'>{title}</div>",
+        unsafe_allow_html=True,
+    )
 
 
-def render_quick_actions() -> None:
+def render_bottom_nav() -> None:
     st.markdown("<div class='bottom-nav'>", unsafe_allow_html=True)
     cols = st.columns(4)
-    actions = ["가이드", "자소서 시작", "첨삭 요청", "예시 보기"]
-    for col, label in zip(cols, actions):
-        if col.button(label, key=f"act_{label}"):
-            st.session_state.messages.append({
-                "role": "user",
-                "content": label,
-                "time": datetime.datetime.now().strftime("%H:%M"),
-            })
-            if label == "가이드":
-                response = get_guideline()
-            else:
-                response = get_ai_response(label)
-            st.session_state.messages.append({
-                "role": "ai",
-                "content": response,
-                "time": datetime.datetime.now().strftime("%H:%M"),
-            })
+    tabs = ["대화", "설정", "세부 설정", "계정"]
+    icons = ["💬", "⚙️", "🛠️", "👤"]
+    for col, tab, icon in zip(cols, tabs, icons):
+        label = f"{icon} {tab}"
+        if col.button(label, key=f"nav_{tab}", use_container_width=True):
+            st.session_state.current_tab = tab
             st.rerun()
     st.markdown("</div>", unsafe_allow_html=True)
 
 
 def render_onboarding():
-    render_header()
-    st.write("AI 자기소개서 작성을 도와주는 챗봇입니다.")
-    st.write("시작 버튼을 눌러 대화를 시작하세요.")
+    render_header("AI 자기소개서")
+    st.markdown(
+        "<div class='onboard-wrapper'>"\
+        "<div class='onboard-circle'>✍️</div>"\
+        "<h3>AI 자기소개서</h3>"\
+        "<p>AI와 대화하면서 나만의 탄탄한 자기소개서를 완성하세요.</p>"\
+        "<ol style='text-align:left; display:inline-block;'>"\
+        "<li>AI와 대화를 통해 작성의 방향을 잡아</li>"\
+        "<li>궁금한 질문은 언제든지 톡! 작성 톤을 설정하고</li>"\
+        "<li>완벽하게 마무리된 자기소개서를 완성</li>"\
+        "</ol>"\
+        "</div>",
+        unsafe_allow_html=True,
+    )
     if st.button("시작하기", use_container_width=True):
         st.session_state.started = True
         st.session_state.current_tab = "대화"
@@ -318,7 +353,7 @@ def render_onboarding():
 
 
 def render_chat_tab():
-    render_header()
+    render_header("AI 대화")
     for msg in st.session_state.messages:
         if msg["role"] == "user":
             st.markdown(
@@ -378,49 +413,75 @@ def render_chat_tab():
                 st.session_state.saved_files = []
                 st.success("모든 파일이 삭제되었습니다!")
                 st.session_state.show_saved = False
-    render_quick_actions()
+    render_bottom_nav()
+
+
+def render_settings_tab():
+    render_header("기본 설정")
+    models = ["GPT-4 (무료)", "GPT-4", "GPT-3.5"]
+    st.session_state.basic_settings["model"] = st.selectbox(
+        "AI 모델 선택",
+        models,
+        index=models.index(st.session_state.basic_settings.get("model", models[0])),
+    )
+    tones = ["전문적", "친근한", "격식 있는", "캐주얼"]
+    st.session_state.basic_settings["tone"] = st.selectbox(
+        "작성 톤",
+        tones,
+        index=tones.index(st.session_state.basic_settings.get("tone", tones[0])),
+    )
+    st.session_state.basic_settings["length"] = st.slider(
+        "글자 수",
+        min_value=300,
+        max_value=2000,
+        value=st.session_state.basic_settings.get("length", 800),
+    )
+    render_bottom_nav()
 
 
 def render_advanced_settings_tab():
-    render_header()
-    api_key = st.text_input(
+    render_header("세부 설정")
+    st.session_state.advanced_settings["creativity"] = st.slider(
+        "창의성",
+        0.0,
+        1.0,
+        value=st.session_state.advanced_settings.get("creativity", 0.5),
+    )
+    st.session_state.advanced_settings["polish"] = st.slider(
+        "완성 수준",
+        0.0,
+        1.0,
+        value=st.session_state.advanced_settings.get("polish", 0.5),
+    )
+    st.markdown("---")
+    st.session_state.advanced_settings["auto_save"] = st.toggle(
+        "자동 저장", value=st.session_state.advanced_settings.get("auto_save", True)
+    )
+    st.session_state.advanced_settings["smart_edit"] = st.toggle(
+        "스마트 편집", value=st.session_state.advanced_settings.get("smart_edit", True)
+    )
+    st.markdown("---")
+    export_options = ["PDF 문서", "Word 문서", "텍스트 파일", "HTML 문서"]
+    st.session_state.advanced_settings["export_format"] = st.selectbox(
+        "내보내기 설정",
+        export_options,
+        index=export_options.index(st.session_state.advanced_settings.get("export_format", "PDF 문서")),
+    )
+    render_bottom_nav()
+
+
+def render_account_tab():
+    render_header("계정")
+    key = st.text_input(
         "OpenAI API Key",
         value=st.session_state.api_key,
         type="password",
         placeholder="sk-...",
-        help="OpenAI API 키를 입력하면 더 정확한 AI 응답을 받을 수 있습니다.",
     )
-    if api_key != st.session_state.api_key:
-        st.session_state.api_key = api_key
+    if key != st.session_state.api_key:
+        st.session_state.api_key = key
         st.success("API 키가 저장되었습니다!")
-    st.markdown("---")
-    st.session_state.model_settings["temperature"] = st.slider(
-        "창의성 (Temperature)",
-        min_value=0.0,
-        max_value=1.0,
-        value=st.session_state.model_settings["temperature"],
-        step=0.1,
-    )
-    st.session_state.model_settings["max_length"] = st.number_input(
-        "최대 응답 길이 (자)",
-        min_value=100,
-        max_value=3000,
-        value=st.session_state.model_settings["max_length"],
-        step=100,
-    )
-    tone_options = ["전문적인", "친근한", "캐주얼", "격식있는"]
-    current_tone = st.session_state.model_settings.get("tone", "전문적인")
-    st.session_state.model_settings["tone"] = st.selectbox(
-        "응답 톤",
-        tone_options,
-        index=tone_options.index(current_tone) if current_tone in tone_options else 0,
-    )
-    st.markdown("---")
-    st.session_state.save_format = st.selectbox(
-        "기본 저장 형식",
-        ["txt", "docx", "pdf"],
-        index=["txt", "docx", "pdf"].index(st.session_state.save_format),
-    )
+    render_bottom_nav()
 
 # ================= 메인 앱 =================
 def main():
@@ -432,8 +493,12 @@ def main():
     page = st.session_state.get("current_tab", "대화")
     if page == "대화":
         render_chat_tab()
-    elif page == "세부설정":
+    elif page == "설정":
+        render_settings_tab()
+    elif page == "세부 설정":
         render_advanced_settings_tab()
+    else:
+        render_account_tab()
 
 if __name__ == "__main__":
     main()
