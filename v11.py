@@ -100,8 +100,11 @@ if "model_settings" not in st.session_state:
     st.session_state.model_settings = {
         "temperature": 0.7,
         "max_length": 1000,
-        "tone": "professional",
+        "tone": "전문적인",
     }
+
+if "show_saved" not in st.session_state:
+    st.session_state.show_saved = False
 
 # ================= 가이드라인 응답 =================
 def get_guideline() -> str:
@@ -259,30 +262,21 @@ def save_conversation():
 
 # ================= UI 렌더링 함수 =================
 def render_header() -> None:
-    tabs = ["대화", "설정", "세부설정", "저장소"]
+    tabs = ["대화", "세부설정"]
     col1, col2 = st.columns([4, 1], gap="small")
     with col1:
         st.markdown(
-            f"<div style='background:{MAIN_COLOR}; padding:12px; border-radius:0 0 0 18px; text-align:left;'>"
+            f"<div style='background:{MAIN_COLOR}; padding:12px; border-radius:0 0 0 18px; text-align:left; display:inline-block;'>"
             f"<span class='chat-header-title'>AI 자기소개서 코칭</span></div>",
             unsafe_allow_html=True,
         )
     with col2:
-        st.markdown(
-            f"<div style='background:{MAIN_COLOR}; padding:12px; border-radius:0 0 18px 0;'>",
-            unsafe_allow_html=True,
-        )
         selection = st.selectbox(
             "탭 선택",
             tabs,
             index=tabs.index(st.session_state.current_tab),
             label_visibility="collapsed",
             key="tab_select",
-        )
-        st.markdown("</div>", unsafe_allow_html=True)
-        st.markdown(
-            f"<style>div[data-testid='stSelectbox'] div[data-baseweb='select']{{background:{MAIN_COLOR}; color:white;}}</style>",
-            unsafe_allow_html=True,
         )
     if selection != st.session_state.current_tab:
         st.session_state.current_tab = selection
@@ -339,11 +333,16 @@ def render_chat_tab():
             )
     st.write("---")
     uploaded_file = st.file_uploader("📎 파일 첨부 (txt, docx)", type=["txt", "docx"])
-    col1, col2 = st.columns([5, 1])
+    col1, col2, col3, col4 = st.columns([5, 1, 1, 1])
     with col1:
         user_input = st.text_input("메시지", placeholder="메시지를 입력하세요...", label_visibility="collapsed")
     with col2:
         send = st.button("전송")
+    with col3:
+        save = st.button("저장하기")
+    with col4:
+        if st.button("📂"):
+            st.session_state.show_saved = not st.session_state.get("show_saved", False)
     if send and user_input:
         st.session_state.messages.append({
             "role": "user",
@@ -358,10 +357,31 @@ def render_chat_tab():
             "time": datetime.datetime.now().strftime("%H:%M"),
         })
         st.rerun()
+    if save:
+        filename = save_conversation()
+        st.success(f"{filename} 저장됨!")
+    if st.session_state.get("show_saved", False):
+        st.markdown("---")
+        if not st.session_state.saved_files:
+            st.info("저장된 파일이 없습니다.")
+        else:
+            for i, file in enumerate(st.session_state.saved_files):
+                st.write(f"📄 {file['name']} ({file['date']}, {file['size']} bytes)")
+                st.download_button(
+                    label="다운로드",
+                    data=file["data"],
+                    file_name=file["name"],
+                    mime=file["mime"],
+                    key=f"download_{i}_{file['name']}",
+                )
+            if st.button("🗑️ 모든 파일 삭제"):
+                st.session_state.saved_files = []
+                st.success("모든 파일이 삭제되었습니다!")
+                st.session_state.show_saved = False
     render_quick_actions()
 
 
-def render_settings_tab():
+def render_advanced_settings_tab():
     render_header()
     api_key = st.text_input(
         "OpenAI API Key",
@@ -374,24 +394,6 @@ def render_settings_tab():
         st.session_state.api_key = api_key
         st.success("API 키가 저장되었습니다!")
     st.markdown("---")
-    col1, col2 = st.columns(2)
-    with col1:
-        if st.button("🗑️ 대화 초기화"):
-            st.session_state.messages = [{
-                "role": "ai",
-                "content": "안녕하세요! AI 자기소개서 코치입니다. 무엇을 도와드릴까요?",
-                "time": datetime.datetime.now().strftime("%H:%M")
-            }]
-            st.success("대화가 초기화되었습니다!")
-            st.rerun()
-    with col2:
-        if st.button("💾 대화 저장"):
-            filename = save_conversation()
-            st.success(f"{filename} 저장됨!")
-
-
-def render_advanced_settings_tab():
-    render_header()
     st.session_state.model_settings["temperature"] = st.slider(
         "창의성 (Temperature)",
         min_value=0.0,
@@ -406,10 +408,12 @@ def render_advanced_settings_tab():
         value=st.session_state.model_settings["max_length"],
         step=100,
     )
+    tone_options = ["전문적인", "친근한", "캐주얼", "격식있는"]
+    current_tone = st.session_state.model_settings.get("tone", "전문적인")
     st.session_state.model_settings["tone"] = st.selectbox(
         "응답 톤",
-        ["professional", "friendly", "casual", "formal"],
-        index=["professional", "friendly", "casual", "formal"].index(st.session_state.model_settings["tone"]),
+        tone_options,
+        index=tone_options.index(current_tone) if current_tone in tone_options else 0,
     )
     st.markdown("---")
     st.session_state.save_format = st.selectbox(
@@ -417,30 +421,6 @@ def render_advanced_settings_tab():
         ["txt", "docx", "pdf"],
         index=["txt", "docx", "pdf"].index(st.session_state.save_format),
     )
-    st.info("📌 저장된 파일은 '저장소' 탭에서 확인할 수 있습니다")
-
-
-def render_storage_tab():
-    render_header()
-    if not st.session_state.saved_files:
-        st.info("저장된 파일이 없습니다. 대화를 저장하려면 설정 탭을 이용하세요.")
-    else:
-        st.write(f"총 {len(st.session_state.saved_files)}개의 파일이 저장되어 있습니다.")
-        for i, file in enumerate(st.session_state.saved_files):
-            st.write(f"📄 {file['name']} ({file['date']}, {file['size']} bytes)")
-            st.download_button(
-                label="다운로드",
-                data=file["data"],
-                file_name=file["name"],
-                mime=file["mime"],
-                key=f"download_{i}_{file['name']}",
-            )
-    if st.session_state.saved_files:
-        st.markdown("---")
-        if st.button("🗑️ 모든 파일 삭제"):
-            st.session_state.saved_files = []
-            st.success("모든 파일이 삭제되었습니다!")
-            st.rerun()
 
 # ================= 메인 앱 =================
 def main():
@@ -452,12 +432,8 @@ def main():
     page = st.session_state.get("current_tab", "대화")
     if page == "대화":
         render_chat_tab()
-    elif page == "설정":
-        render_settings_tab()
     elif page == "세부설정":
         render_advanced_settings_tab()
-    elif page == "저장소":
-        render_storage_tab()
 
 if __name__ == "__main__":
     main()
