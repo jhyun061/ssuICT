@@ -2,23 +2,23 @@ import streamlit as st
 import io, csv
 
 # ---------------------------
-# 3.1 Page config
+# 3.1 페이지 설정
 # ---------------------------
 st.set_page_config(page_title="패스포인트", page_icon="💬", layout="wide", initial_sidebar_state="expanded")
 
 # ---------------------------
-# 3.2 Tiny CSS for styling (safe tweaks)
+# 3.2 최소한의 CSS 스타일
 # ---------------------------
 st.markdown(
     """
     <style>
-      /* Bubbles */
-      .bubble-user {background:#e5f2ff;padding:0.7rem 1rem;border-radius:14px;display:inline-block;}
-      .bubble-assistant {background:#efecff;padding:0.7rem 1rem;border-radius:14px;display:inline-block;}
+      /* 말풍선 */
+      .bubble-user {background:#f0f0f0;color:#000;padding:0.7rem 1rem;border-radius:14px;display:inline-block;}
+      .bubble-assistant {background:#d3f9d8;color:#000;padding:0.7rem 1rem;border-radius:14px;display:inline-block;}
       .muted {color:#6b7280;font-size:0.85rem}
-      /* Card-like containers */
-      [data-testid="stVerticalBlock"]>.st-emotion-cache-ue6h4q {padding:0.6rem 0.8rem;border-radius:12px;background:#f7f7fb;}
-      /* Sidebar width hint */
+      /* 카드 모양 컨테이너 */
+      [data-testid="stVerticalBlock"]>.st-emotion-cache-ue6h4q {padding:0.6rem 0.8rem;border-radius:12px;background:#ffffff;}
+      /* 사이드바 너비 힌트 */
       section[data-testid="stSidebar"] {min-width: 300px;}
     </style>
     """,
@@ -26,64 +26,67 @@ st.markdown(
 )
 
 # ---------------------------
-# 3.3 App state (all pages share this)
+# 3.3 앱 상태 (모든 페이지 공유)
 # ---------------------------
 if "profile" not in st.session_state:
-    st.session_state.profile = {"name": "Guest", "avatar": None}
+    st.session_state.profile = {"name": "손님", "avatar": None}
 if "settings" not in st.session_state:
     st.session_state.settings = {"model": "demo", "temperature": 0.7, "theme": "system"}
 if "chat" not in st.session_state:
-    st.session_state.chat = {"history": []}  # list of dicts {role, content}
+    st.session_state.chat = {"history": []}  # 역할과 내용을 담은 딕셔너리 목록
 if "docs" not in st.session_state:
     st.session_state.docs = {"files": [], "notes": ""}
 
 # ---------------------------
-# 3.4 Navigation (custom router)
+# 3.4 내비게이션 (커스텀 라우터)
 # ---------------------------
 with st.sidebar:
-    st.header("Navigation")
-    page = st.radio("Go to", ["Home", "Chat", "Documents", "Settings", "User"], label_visibility="collapsed")
+    st.header("내비게이션")
+    page = st.radio("이동", ["메인", "채팅", "문서", "설정", "사용자"], label_visibility="collapsed")
     st.divider()
-    st.caption("Tip: Use **/** to focus the chat input. Use the tabs on Documents to upload & preview.")
+    st.caption("팁: **/** 키로 채팅 입력창에 바로 이동합니다. 문서 페이지의 탭에서 업로드와 미리보기가 가능합니다.")
 
 # ---------------------------
-# 3.5 Page functions (all in one file)
+# 3.5 페이지 함수
 # ---------------------------
 
 def hero(title: str, subtitle: str):
     st.markdown(
         f"""
-        <div style='padding:1rem;border-radius:16px;background:#f6f6f9'>
-          <h1 style='margin:0'>{title}</h1>
+        <div style='padding:1rem;border-radius:16px;background:#f5f5f5'>
+          <h1 style='margin:0;color:#2e7d32'>{title}</h1>
           <p style='margin:0.3rem 0 0 0;color:#555'>{subtitle}</p>
         </div>
         """,
         unsafe_allow_html=True,
     )
 
-# --- Home ---
+def page_title(text: str):
+    st.markdown(f"<h1 style='color:#2e7d32'>{text}</h1>", unsafe_allow_html=True)
+
+# --- 메인 ---
 
 def page_home():
-    hero("💬 Chat App", "A simple chatbot with uploads and settings — no extra packages.")
-    st.write("Use the sidebar to switch pages.")
+    hero("💬 패스포인트", "파일 업로드와 설정 기능을 갖춘 간단한 챗봇입니다. 추가 패키지는 필요하지 않습니다.")
+    st.write("사이드바에서 페이지를 전환하세요.")
     c1, c2, c3 = st.columns(3)
-    c1.metric("Conversations", len([m for m in st.session_state.chat["history"] if m["role"]=="user"]))
-    c2.metric("Assistant replies", len([m for m in st.session_state.chat["history"] if m["role"]=="assistant"]))
-    c3.metric("Files uploaded", len(st.session_state.docs.get("files", [])))
+    c1.metric("대화 수", len([m for m in st.session_state.chat["history"] if m["role"]=="user"]))
+    c2.metric("챗봇 답변 수", len([m for m in st.session_state.chat["history"] if m["role"]=="assistant"]))
+    c3.metric("업로드된 파일 수", len(st.session_state.docs.get("files", [])))
 
-# --- Chat logic (placeholder brain) ---
+# --- 채팅 로직 (플레이스홀더) ---
 
 def simple_answer(user_text: str) -> str:
-    # Very basic: search your notes text for the query and echo back
+    # 매우 단순한 예: 메모에서 내용을 찾아 보여줍니다
     notes = (st.session_state.docs.get("notes") or "").lower()
     if user_text and user_text.lower() in notes:
-        return "Found that in your notes. Here's a snippet: " + notes[:300]
-    return f"You said: {user_text}. (Replace this with your model call.)"
+        return "메모에서 찾았습니다. 일부만 보여드릴게요: " + notes[:300]
+    return f"사용자 입력: {user_text}. (여기에 모델 호출을 구현하세요.)"
 
-# --- Chat page ---
+# --- 채팅 페이지 ---
 
 def page_chat():
-    st.title("Chat")
+    page_title("채팅")
 
     # Render history
     for msg in st.session_state.chat["history"]:
@@ -92,7 +95,7 @@ def page_chat():
             st.markdown(f"<div class='{css}'>{msg['content']}</div>", unsafe_allow_html=True)
 
     # Input
-    user_text = st.chat_input("Type a message…")
+    user_text = st.chat_input("메시지를 입력하세요…")
     if user_text:
         st.session_state.chat["history"].append({"role": "user", "content": user_text})
         with st.chat_message("user"):
@@ -105,42 +108,42 @@ def page_chat():
 
     st.divider()
     col1, col2, col3 = st.columns(3)
-    if col1.button("Clear chat"):
+    if col1.button("채팅 지우기"):
         st.session_state.chat["history"] = []
-        st.toast("Chat cleared.")
-    if col2.button("Copy last answer") and any(m["role"]=="assistant" for m in st.session_state.chat["history"]):
+        st.toast("채팅이 지워졌습니다.")
+    if col2.button("마지막 답변 복사") and any(m["role"]=="assistant" for m in st.session_state.chat["history"]):
         last = [m for m in st.session_state.chat["history"] if m["role"]=="assistant"][-1]["content"]
         st.code(last)
-    if col3.download_button("Download history (JSON)", str(st.session_state.chat["history"])):
+    if col3.download_button("대화 내역 다운로드 (JSON)", str(st.session_state.chat["history"])):
         pass
 
-# --- Documents page ---
+# --- 문서 페이지 ---
 
 def page_documents():
-    st.title("Documents")
-    tabs = st.tabs(["Upload", "Preview", "Notes"])  # Notes power the demo chat
+    page_title("문서")
+    tabs = st.tabs(["업로드", "미리보기", "메모"])  # 메모는 데모 채팅에 사용
 
     with tabs[0]:
         uploaded = st.file_uploader(
-            "Upload files (TXT, CSV, PDF, PNG, JPG)",
+            "파일 업로드 (TXT, CSV, PDF, PNG, JPG)",
             type=["txt","csv","pdf","png","jpg","jpeg"],
             accept_multiple_files=True,
         )
         if uploaded:
             st.session_state.docs["files"] = uploaded
-            st.success(f"Saved {len(uploaded)} file(s). Go to Preview tab.")
+            st.success(f"파일 {len(uploaded)}개가 저장되었습니다. 미리보기 탭으로 이동하세요.")
 
     with tabs[1]:
         files = st.session_state.docs.get("files", [])
         if not files:
-            st.info("No files uploaded yet.")
+            st.info("아직 업로드된 파일이 없습니다.")
         else:
             for f in files:
                 st.write("—", f.name)
                 if f.type == "text/plain":
                     st.text(f.read().decode("utf-8")[:500]); f.seek(0)
                 elif f.type in ("text/csv", "application/vnd.ms-excel"):
-                    # Use csv module (no pandas)
+                    # csv 모듈 사용 (pandas 없음)
                     content = io.StringIO(f.read().decode("utf-8")); f.seek(0)
                     reader = csv.reader(content)
                     rows = list(reader)[:10]
@@ -148,57 +151,63 @@ def page_documents():
                 elif f.type.startswith("image/"):
                     st.image(f, use_container_width=True); f.seek(0)
                 else:
-                    st.caption("(Preview not implemented — stored for later processing)")
+                    st.caption("미리보기가 구현되지 않았습니다 — 추후 처리를 위해 저장되었습니다.")
 
     with tabs[2]:
-        st.caption("Add quick notes or paste key text to power the demo chat.")
-        st.session_state.docs["notes"] = st.text_area("Reference notes", value=st.session_state.docs.get("notes", ""), height=160)
-        st.success("Notes saved.")
+        st.caption("데모 채팅을 위해 간단한 메모나 주요 텍스트를 추가하세요.")
+        st.session_state.docs["notes"] = st.text_area("참고 메모", value=st.session_state.docs.get("notes", ""), height=160)
+        st.success("메모가 저장되었습니다.")
 
-# --- Settings page ---
+# --- 설정 페이지 ---
 
 def page_settings():
-    st.title("Settings")
+    page_title("설정")
     with st.form("settings_form"):
-        model = st.selectbox("Model", ["demo", "gpt-like", "local"], index=["demo","gpt-like","local"].index(st.session_state.settings["model"]))
-        temperature = st.slider("Creativity (temperature)", 0.0, 1.0, st.session_state.settings["temperature"], 0.05)
-        theme = st.radio("Theme", ["system", "light", "dark"], index=["system","light","dark"].index(st.session_state.settings["theme"]))
-        submitted = st.form_submit_button("Save settings")
+        model_options = {"데모": "demo", "GPT유사": "gpt-like", "로컬": "local"}
+        current_model_display = [k for k, v in model_options.items() if v == st.session_state.settings["model"]][0]
+        model_display = st.selectbox("모델", list(model_options.keys()), index=list(model_options.keys()).index(current_model_display))
+        model = model_options[model_display]
+        temperature = st.slider("창의성(온도)", 0.0, 1.0, st.session_state.settings["temperature"], 0.05)
+        theme_options = {"시스템": "system", "라이트": "light", "다크": "dark"}
+        current_theme_display = [k for k, v in theme_options.items() if v == st.session_state.settings["theme"]][0]
+        theme_display = st.radio("테마", list(theme_options.keys()), index=list(theme_options.keys()).index(current_theme_display))
+        theme = theme_options[theme_display]
+        submitted = st.form_submit_button("설정 저장")
     if submitted:
         st.session_state.settings.update({"model": model, "temperature": temperature, "theme": theme})
-        st.success("Settings saved.")
+        st.success("설정이 저장되었습니다.")
 
-# --- User page ---
+# --- 사용자 페이지 ---
 
 def page_user():
-    st.title("User")
+    page_title("사용자")
     c1, c2 = st.columns([1,3])
     with c1:
         if st.session_state.profile["avatar"]:
-            st.image(st.session_state.profile["avatar"], caption="Avatar", use_container_width=True)
+            st.image(st.session_state.profile["avatar"], caption="아바타", use_container_width=True)
         else:
-            st.markdown("<div class='muted'>(No avatar uploaded)</div>", unsafe_allow_html=True)
+            st.markdown("<div class='muted'>아바타가 없습니다</div>", unsafe_allow_html=True)
     with c2:
         with st.form("profile_form"):
-            name = st.text_input("Display name", value=st.session_state.profile.get("name", "Guest"))
-            avatar = st.file_uploader("Upload avatar", type=["png","jpg","jpeg"])
-            ok = st.form_submit_button("Save profile")
+            name = st.text_input("표시 이름", value=st.session_state.profile.get("name", "손님"))
+            avatar = st.file_uploader("아바타 업로드", type=["png","jpg","jpeg"])
+            ok = st.form_submit_button("프로필 저장")
         if ok:
-            st.session_state.profile["name"] = name or "Guest"
+            st.session_state.profile["name"] = name or "손님"
             if avatar:
                 st.session_state.profile["avatar"] = avatar
-            st.success("Profile updated.")
+            st.success("프로필이 업데이트되었습니다.")
 
 # ---------------------------
-# 3.6 Router switch
+# 3.6 라우터 스위치
 # ---------------------------
-if page == "Home":
+if page == "메인":
     page_home()
-elif page == "Chat":
+elif page == "채팅":
     page_chat()
-elif page == "Documents":
+elif page == "문서":
     page_documents()
-elif page == "Settings":
+elif page == "설정":
     page_settings()
-elif page == "User":
+elif page == "사용자":
     page_user()
